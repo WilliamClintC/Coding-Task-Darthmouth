@@ -2,6 +2,7 @@
 library(readr)
 library(stargazer)
 library(rstudioapi)
+library(dplyr)
 
 # Set the working directory to the location of the current R script
 current_path <- rstudioapi::getActiveDocumentContext()$path
@@ -22,8 +23,13 @@ df$gamemonth <- as.factor(df$gamemonth)
 df$team <- as.factor(df$team)
 df$year <- as.factor(df$year)
 
+# Create dummy variables for each range of days before the game using a loop
+for (i in seq(0, 240, by = 8)) {
+  df[[paste0("D_", i %/% 8 + 1)]] <- ifelse(df$days_from_transaction_until_game >= i & df$days_from_transaction_until_game <= i + 8, 1, 0)
+}
+
 # Define the features and target variable, removing duplicates
-features <- c('days_from_transaction_until_game', 'day_game', 'weekend_game', 'sectiontype', 'number_of_tickets', 'gamemonth', 'team', 'year')
+features <- c(paste0("D_", 1:31), 'day_game', 'weekend_game', 'sectiontype', 'gamemonth', 'team', 'year', 'number_of_tickets')
 X <- df[features]
 y <- df$price_per_ticket
 
@@ -61,3 +67,49 @@ stargazer(model_with_tickets, model_without_tickets, model_with_tickets_log, mod
                            c("Year Controls", "Yes", "Yes", "Yes", "Yes"),
                            c("Number of Tickets Controls", "Yes", "No", "Yes", "No"))
 )
+
+
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Function to extract and plot coefficients
+plot_model_coefficients <- function(model, model_name) {
+  # Extract coefficients from the model
+  coefficients <- summary(model)$coefficients
+  
+  # Filter coefficients to include only those related to the dummy variables D_1, D_2, ..., D_31
+  D_coefficients <- coefficients[grep("^D_", rownames(coefficients)), ]
+  
+  # Create a data frame with the coefficients and their corresponding dummy variable names
+  D_coefficients_df <- data.frame(
+    Dummy = rownames(D_coefficients),
+    Coefficient = D_coefficients[, "Estimate"],
+    StdError = D_coefficients[, "Std. Error"],
+    Model = model_name
+  )
+  
+  # Convert Dummy to a factor with levels ordered accordingly and then reverse the levels
+  D_coefficients_df$Dummy <- factor(D_coefficients_df$Dummy, levels = rev(paste0("D_", 1:31)))
+  
+  return(D_coefficients_df)
+}
+
+# Extract coefficients for all models
+coefficients_with_tickets <- plot_model_coefficients(model_with_tickets, "With Tickets")
+coefficients_without_tickets <- plot_model_coefficients(model_without_tickets, "Without Tickets")
+coefficients_with_tickets_log <- plot_model_coefficients(model_with_tickets_log, "With Tickets (Log Price)")
+coefficients_without_tickets_log <- plot_model_coefficients(model_without_tickets_log, "Without Tickets (Log Price)")
+
+# Combine all coefficients into one data frame
+all_coefficients_df <- bind_rows(coefficients_with_tickets, coefficients_without_tickets, coefficients_with_tickets_log, coefficients_without_tickets_log)
+
+# Plot the coefficients using ggplot2
+ggplot(all_coefficients_df, aes(x = Dummy, y = Coefficient, color = Model)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Coefficient - 1.96 * StdError, ymax = Coefficient + 1.96 * StdError), width = 0.2) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Coefficients of Dummy Variables (Days from Transaction Until Game) on Ticket Price", x = "Dummy Variable", y = "Coefficient") +
+  facet_wrap(~ Model, scales = "free_y")
+
