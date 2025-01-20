@@ -1,7 +1,0 @@
-1. create a simple regression model to investigate
-2. initial results seem to indicate that the earlier you buy the more expensive tickets are 
-3. plot to visualize to investiagete further
-assume constant demand per year
-i find thre result unvoncinig so i createa a fcuntion tho check in the datascatter plot distribution if this is truly the case
-i go one by one beetween each scatter plot and check if the observation holds
-assuming i buy 1 tickets
